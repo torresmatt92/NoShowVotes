@@ -1,4 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+// Real CA data loader
+let CA_REAL_DATA = null;
+async function loadCAData() {
+  try {
+    const res = await fetch("/votewatch_data.json");
+    const json = await res.json();
+    CA_REAL_DATA = {};
+    for (const leg of json.legislators) {
+      CA_REAL_DATA[leg.name] = { present:leg.present, absent:leg.absent, abstain:leg.abstain };
+    }
+    console.log("Loaded real data for " + Object.keys(CA_REAL_DATA).length + " CA legislators");
+  } catch(e) { console.warn("Using estimated data", e); }
+}
 
 // ── US Senators (statewide — same for everyone in state) ────────
 const US_SENATORS = {
@@ -682,6 +696,14 @@ function SearchScreen({ onSearch }) {
   );
 }
 
+function getRealStats(name, fp, fa, fab) {
+  if (CA_REAL_DATA && CA_REAL_DATA[name]) {
+    const d = CA_REAL_DATA[name];
+    return [d.present, d.absent, d.abstain];
+  }
+  return [fp, fa, fab];
+}
+
 function ResultsScreen({ zip, zipData, onBack, onDrillDown }) {
   const { city, state, stateName, cd, sd, ad } = zipData;
   const senators = US_SENATORS[state] || [];
@@ -752,10 +774,10 @@ function ResultsScreen({ zip, zipData, onBack, onDrillDown }) {
             <SectionHeader emoji="🏟️" title={`${stateName} State Legislature`}/>
             {senRow&&<MemberCard name={senRow[0]} role="State Senator" party={senRow[1]}
               district={sd} body={`${state} Senate · District ${sd}`}
-              present={senRow[2]} absent={senRow[3]} abstain={senRow[4]} onDrillDown={onDrillDown}/>}
+              present={getRealStats(senRow[0],senRow[2],senRow[3],senRow[4])[0]} absent={getRealStats(senRow[0],senRow[2],senRow[3],senRow[4])[1]} abstain={getRealStats(senRow[0],senRow[2],senRow[3],senRow[4])[2]} onDrillDown={onDrillDown}/>}
             {asmRow&&<MemberCard name={asmRow[0]} role={state==="CA"?"Assembly Member":"State Representative"} party={asmRow[1]}
               district={ad} body={`${state} House · District ${ad}`}
-              present={asmRow[2]} absent={asmRow[3]} abstain={asmRow[4]} onDrillDown={onDrillDown}/>}
+              present={getRealStats(asmRow[0],asmRow[2],asmRow[3],asmRow[4])[0]} absent={getRealStats(asmRow[0],asmRow[2],asmRow[3],asmRow[4])[1]} abstain={getRealStats(asmRow[0],asmRow[2],asmRow[3],asmRow[4])[2]} onDrillDown={onDrillDown}/>}
           </div>
         )}
 
@@ -782,6 +804,8 @@ export default function NoShowVotes() {
   const [zipData,setZipData]=useState(null);
   const [drillMember,setDrillMember]=useState(null);
   const [drillFilter,setDrillFilter]=useState(null);
+
+  useEffect(()=>{ loadCAData(); },[]);
 
   const handleSearch=(zipCode,data)=>{setZip(zipCode);setZipData(data);setScreen("results");};
   const handleDrillDown=(member,filter)=>{setDrillMember(member);setDrillFilter(filter);setScreen("detail");};

@@ -622,42 +622,29 @@ function SectionHeader({ emoji, title, subtitle }) {
   );
 }
 
-const GOOGLE_CIVIC_KEY = "AIzaSyASDWoO6wAovxCykfkoXh1OuO-fdOL1EHs";
-
+// 5calls.org API — free replacement for Google Civic Representatives API
 async function lookupZipCivic(zip) {
-  // Google Civic API — works for every US zip code
-  const url = `https://www.googleapis.com/civicinfo/v2/representatives?key=${GOOGLE_CIVIC_KEY}&address=${zip}+USA&levels=country&levels=administrativeArea1&roles=legislatorUpperBody&roles=legislatorLowerBody`;
+  const url = `https://api.5calls.org/v1/representatives?location=${zip}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Civic API error");
+  if (!res.ok) throw new Error("5calls API error");
   const data = await res.json();
 
-  const input = data.normalizedInput || {};
-  const city = input.city || zip;
-  const stateAbbr = input.state || "";
+  const reps = data.representatives || [];
+  if (reps.length === 0) throw new Error("No reps found");
 
-  // Parse offices and officials
-  let cd = "", sd = "", ad = "";
-  const offices = data.offices || [];
-  const officials = data.officials || [];
+  // Get state from first rep
+  const firstRep = reps[0];
+  const stateAbbr = firstRep.state || "";
+  const city = zip;
 
-  for (const office of offices) {
-    const name = (office.name || "").toLowerCase();
-    const indices = office.officialIndices || [];
-    if (name.includes("united states house") || name.includes("u.s. house")) {
-      const m = office.name.match(/(\d+)/);
-      if (m) cd = m[1];
-    }
-    if (name.includes("state senate") && !name.includes("united states")) {
-      const m = office.name.match(/(\d+)/);
-      if (m) sd = m[1];
-    }
-    if ((name.includes("state assembly") || name.includes("state house") || name.includes("state representative")) && !name.includes("united states")) {
-      const m = office.name.match(/(\d+)/);
-      if (m) ad = m[1];
-    }
-  }
-
-  return { city, state: stateAbbr, stateName: stateAbbr, cd, sd, ad, fromCivic: true, civicData: data };
+  return {
+    city,
+    state: stateAbbr,
+    stateName: stateAbbr,
+    cd: "", sd: "", ad: "",
+    fromCivic: true,
+    civicData: { representatives: reps }
+  };
 }
 
 function SearchScreen({ onSearch }) {
@@ -756,32 +743,31 @@ function getRealStats(name, fp, fa, fab) {
 
 function parseCivicOfficials(civicData) {
   if (!civicData) return [];
-  const offices = civicData.offices || [];
-  const officials = civicData.officials || [];
-  const reps = [];
-  for (const office of offices) {
-    const oname = (office.name || "").toLowerCase();
-    const isUS = oname.includes("united states") || oname.includes("u.s. senate");
-    const isSen = oname.includes("senate");
-    const isHouse = oname.includes("house") || oname.includes("assembly") || oname.includes("representative");
-    if (!isSen && !isHouse) continue;
-    for (const idx of (office.officialIndices || [])) {
-      const off = officials[idx];
-      if (!off) continue;
-      const party = (off.party||"").includes("Democrat") ? "D" : (off.party||"").includes("Republican") ? "R" : "I";
-      const distMatch = office.name.match(/(\d+)/);
-      reps.push({
-        name: off.name,
-        role: isUS && isSen ? "U.S. Senator" : !isUS && isSen ? "State Senator" : isUS ? "U.S. Representative" : "Assembly Member",
-        party,
-        district: distMatch ? distMatch[1] : "—",
-        body: office.name,
-        present: 280, absent: 30, abstain: 8,
-        isCivic: true,
-      });
-    }
-  }
-  return reps;
+  const reps = civicData.representatives || [];
+  return reps.map(r => {
+    const area = (r.area || "").toLowerCase();
+    const name = r.name || "Unknown";
+    const party = (r.party || "").includes("Democrat") ? "D"
+                : (r.party || "").includes("Republican") ? "R" : "I";
+    const isSenator = area.includes("senate") || r.area === "US_SENATE";
+    const isHouse = area.includes("house") || area.includes("assembly") || area.includes("representative");
+    const isUS = area.includes("us_") || area.includes("federal") || r.area === "US_SENATE" || r.area === "US_HOUSE";
+    let role = "Representative";
+    if (isUS && isSenator) role = "U.S. Senator";
+    else if (isUS && isHouse) role = "U.S. Representative";
+    else if (!isUS && isSenator) role = "State Senator";
+    else if (!isUS && isHouse) role = "Assembly Member";
+    const distMatch = (r.district || "").match(/\d+/);
+    return {
+      name,
+      role,
+      party,
+      district: distMatch ? distMatch[0] : (r.district || "—"),
+      body: r.area || role,
+      present: 280, absent: 30, abstain: 8,
+      isCivic: true,
+    };
+  }).filter(r => r.role !== "Representative");
 }
 
 function ResultsScreen({ zip, zipData, onBack, onDrillDown }) {

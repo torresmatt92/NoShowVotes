@@ -614,7 +614,7 @@ function SearchScreen({ onSearch }) {
   const handle=()=>{
     if(zip.length<5)return;
     const result=ZIP_DATA[zip];
-    if(!result){setErr("Zip code not found. Please enter a valid US zip code.");return;}
+    if(!result){setErr(`We're still adding zip codes — ${zip} isn't in our database yet. We're expanding weekly. Try: 91768, 90001, 10001, 77001, or 60601.`);return;}
     setErr(""); onSearch(zip,result);
   };
 
@@ -662,7 +662,14 @@ function SearchScreen({ onSearch }) {
               borderRadius:14,padding:"0 22px",fontSize:22,
               cursor:zip.length>=5?"pointer":"default",transition:"background 0.2s"}}>→</button>
         </div>
-        {err&&<div style={{marginTop:10,fontSize:12,color:"#f87171",textAlign:"center"}}>{err}</div>}
+        {err&&(
+          <div style={{marginTop:14,background:"rgba(255,255,255,0.08)",borderRadius:14,
+            padding:"16px",border:"1px solid rgba(255,255,255,0.1)"}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#f87171",marginBottom:6}}>📍 Zip code not in our database yet</div>
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6}}>We're expanding weekly. Currently covering major cities across CA, TX, NY, FL, IL, PA, GA, AZ, NV, CO, WA, OR, MN and MI.</div>
+            <div style={{marginTop:10,fontSize:11,color:"#64748b"}}>Try: 91768 · 90001 · 10001 · 77001 · 60601 · 33101</div>
+          </div>
+        )}
         <div style={{marginTop:12,fontSize:11,color:"#475569",textAlign:"center"}}>
           Try: 91768 · 10001 · 77001 · 60601 · 78701
         </div>

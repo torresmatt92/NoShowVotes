@@ -747,31 +747,45 @@ function parseCivicOfficials(civicData) {
 
   return reps.map(r => {
     const name = r.name || "Unknown";
+    if (name === "Unknown") return null;
+
     const partyRaw = (r.party || "").toLowerCase();
     const party = partyRaw.includes("democrat") ? "D"
-                : partyRaw.includes("republican") ? "R" : "I";
+                : partyRaw.includes("republican") ? "R"
+                : partyRaw === "d" ? "D"
+                : partyRaw === "r" ? "R" : "I";
 
-    // WhoIsMyRepresentative: area is "US_HOUSE" or "US_SENATE"
-    const isSenate = r.area === "US_SENATE" || !r.district || r.district === "Senate";
-    const role = isSenate ? "U.S. Senator" : "U.S. Representative";
+    let role = "Representative";
+    let body = "";
+
+    if (r.area === "US_SENATE") {
+      role = "U.S. Senator";
+      body = `U.S. Senate · ${r.state} · 119th Congress`;
+    } else if (r.area === "US_HOUSE") {
+      role = "U.S. Representative";
+      body = `U.S. House · ${r.state}-${r.district} · 119th Congress`;
+    } else if (r.area === "STATE_SENATE") {
+      role = "State Senator";
+      body = `${r.state} State Senate · District ${r.district}`;
+    } else if (r.area === "STATE_HOUSE") {
+      role = r.state === "CA" ? "Assembly Member" : "State Representative";
+      body = `${r.state} ${r.state === "CA" ? "Assembly" : "House"} · District ${r.district}`;
+    } else {
+      return null;
+    }
 
     const distMatch = (r.district || "").match(/\d+/);
-    const district = distMatch ? distMatch[0] : (isSenate ? r.state : "—");
-
+    const district = distMatch ? distMatch[0] : (r.district || "—");
     const realStats = getRealStats(name, 280, 30, 8);
 
     return {
-      name,
-      role,
-      party,
-      district,
-      body: isSenate ? `U.S. Senate · ${r.state}` : `U.S. House · ${r.state}-${district}`,
+      name, role, party, district, body,
       present: realStats[0],
       absent: realStats[1],
       abstain: realStats[2],
       isCivic: true,
     };
-  }).filter(r => r.name !== "Unknown");
+  }).filter(Boolean);
 }
 
 function ResultsScreen({ zip, zipData, onBack, onDrillDown }) {

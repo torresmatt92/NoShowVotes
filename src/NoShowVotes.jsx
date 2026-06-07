@@ -622,24 +622,23 @@ function SectionHeader({ emoji, title, subtitle }) {
   );
 }
 
-// Proxy API — calls our own Vercel serverless function
-// This solves CORS and keeps API keys secure
+// Proxy API — calls our Vercel serverless function → WhoIsMyRepresentative.com
+// Works for every US zip code, no API key needed
 async function lookupZipCivic(zip) {
   const url = `/api/representatives?zip=${zip}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error("Representatives API error");
   const data = await res.json();
 
-  const reps = data.representatives || data.contacts || [];
-  if (reps.length === 0) throw new Error("No reps found");
+  if (data.error) throw new Error(data.error);
 
-  // Get state from first rep
-  const firstRep = reps[0];
-  const stateAbbr = firstRep.state || firstRep.district?.split("-")[0] || "";
-  const city = zip;
+  const reps = data.representatives || [];
+  if (reps.length === 0) throw new Error("No reps found for this zip");
+
+  const stateAbbr = data.state || reps[0]?.state || "";
 
   return {
-    city,
+    city: zip,
     state: stateAbbr,
     stateName: stateAbbr,
     cd: "", sd: "", ad: "",
@@ -744,35 +743,21 @@ function getRealStats(name, fp, fa, fab) {
 
 function parseCivicOfficials(civicData) {
   if (!civicData) return [];
-  // Handle both 5calls format (contacts) and our proxy format (representatives)
-  const reps = civicData.representatives || civicData.contacts || [];
-  const parsed = reps.map(r => {
-    const area = (r.area || r.field_offices?.[0]?.city || "").toLowerCase();
-    const name = r.name || "Unknown";
+  const reps = civicData.representatives || [];
 
-    // Party detection
+  return reps.map(r => {
+    const name = r.name || "Unknown";
     const partyRaw = (r.party || "").toLowerCase();
     const party = partyRaw.includes("democrat") ? "D"
                 : partyRaw.includes("republican") ? "R" : "I";
 
-    // Role detection from area field
-    const isSenUS = r.area === "US_SENATE" || area === "us_senate";
-    const isHouseUS = r.area === "US_HOUSE" || area === "us_house";
-    const isSenState = r.area === "STATE_UPPER" || area === "state_upper";
-    const isHouseState = r.area === "STATE_LOWER" || area === "state_lower";
+    // WhoIsMyRepresentative: area is "US_HOUSE" or "US_SENATE"
+    const isSenate = r.area === "US_SENATE" || !r.district || r.district === "Senate";
+    const role = isSenate ? "U.S. Senator" : "U.S. Representative";
 
-    let role = "";
-    if (isSenUS) role = "U.S. Senator";
-    else if (isHouseUS) role = "U.S. Representative";
-    else if (isSenState) role = "State Senator";
-    else if (isHouseState) role = "Assembly Member";
-    else return null; // skip non-legislative roles
-
-    // District number
     const distMatch = (r.district || "").match(/\d+/);
-    const district = distMatch ? distMatch[0] : (r.district || "—");
+    const district = distMatch ? distMatch[0] : (isSenate ? r.state : "—");
 
-    // Get real stats from LegiScan data if available
     const realStats = getRealStats(name, 280, 30, 8);
 
     return {
@@ -780,16 +765,13 @@ function parseCivicOfficials(civicData) {
       role,
       party,
       district,
-      body: r.district || role,
+      body: isSenate ? `U.S. Senate · ${r.state}` : `U.S. House · ${r.state}-${district}`,
       present: realStats[0],
       absent: realStats[1],
       abstain: realStats[2],
-      photoUrl: r.photoUrl || null,
       isCivic: true,
     };
-  }).filter(Boolean);
-
-  return parsed;
+  }).filter(r => r.name !== "Unknown");
 }
 
 function ResultsScreen({ zip, zipData, onBack, onDrillDown }) {

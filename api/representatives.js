@@ -1,9 +1,8 @@
-// Vercel Serverless Function — proxies 5calls.org API
-// Solves CORS issue — app calls /api/representatives?zip=91768
-// This runs on the server, not the browser
+// Vercel Serverless Function — proxies WhoIsMyRepresentative.com API
+// Free, no API key needed, works for every US zip code
+// App calls /api/representatives?zip=92407
 
 export default async function handler(req, res) {
-  // Allow requests from your domain
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
 
@@ -15,7 +14,7 @@ export default async function handler(req, res) {
 
   try {
     const response = await fetch(
-      `https://api.5calls.org/v1/representatives?location=${zip}`,
+      `https://whoismyrepresentative.com/getall_mems.php?zip=${zip}&output=json`,
       {
         headers: {
           'Accept': 'application/json',
@@ -25,11 +24,30 @@ export default async function handler(req, res) {
     );
 
     if (!response.ok) {
-      throw new Error(`5calls API error: ${response.status}`);
+      throw new Error(`API error: ${response.status}`);
     }
 
     const data = await response.json();
-    return res.status(200).json(data);
+
+    // Transform to our standard format
+    const results = data.results || [];
+    const reps = results.map(r => ({
+      name: r.name,
+      party: r.party === "D" ? "Democrat" : r.party === "R" ? "Republican" : r.party,
+      state: r.state,
+      district: r.district || "Senate",
+      phone: r.phone,
+      link: r.link,
+      office: r.office,
+      // Determine role from district field
+      area: r.district ? "US_HOUSE" : "US_SENATE",
+    }));
+
+    return res.status(200).json({ 
+      representatives: reps,
+      zip,
+      state: results[0]?.state || ""
+    });
 
   } catch (error) {
     console.error('Representative lookup error:', error);

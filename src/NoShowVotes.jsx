@@ -654,17 +654,14 @@ function SearchScreen({ onSearch }) {
 
   const handle=async()=>{
     if(zip.length<5)return;
-    // First try local database for instant response
-    const local=ZIP_DATA[zip];
-    if(local){ setErr(""); onSearch(zip,local); return; }
-    // Fall back to Google Civic API for any US zip
+    // All zips go through the API for accurate current data
     setLoading(true); setErr("");
     try {
       const result = await lookupZipCivic(zip);
       if(!result.state){ setErr("Zip code not found. Please enter a valid US zip code."); setLoading(false); return; }
       setErr(""); onSearch(zip, result);
     } catch(e) {
-      setErr("Could not look up this zip code. Please check your connection and try again.");
+      setErr("Could not find representatives for this zip code. Please enter a valid US zip code.");
     }
     setLoading(false);
   };
@@ -716,8 +713,8 @@ function SearchScreen({ onSearch }) {
         {err&&(
           <div style={{marginTop:14,background:"rgba(255,255,255,0.08)",borderRadius:14,
             padding:"16px",border:"1px solid rgba(255,255,255,0.1)"}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#f87171",marginBottom:6}}>📍 Zip code not in our database yet</div>
-            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6}}>We're expanding weekly. Currently covering major cities across CA, TX, NY, FL, IL, PA, GA, AZ, NV, CO, WA, OR, MN and MI.</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#f87171",marginBottom:6}}>⚠️ Could not find representatives</div>
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6}}>Please enter a valid US zip code and try again.</div>
             <div style={{marginTop:10,fontSize:11,color:"#64748b"}}>Try: 91768 · 90001 · 10001 · 77001 · 60601 · 33101</div>
           </div>
         )}
